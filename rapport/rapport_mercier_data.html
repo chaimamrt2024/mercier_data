@@ -1,0 +1,682 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<title>Rapport Mercier Data</title><style>
+body{font-family:Segoe UI,Arial,sans-serif;color:#222;max-width:960px;margin:auto;padding:24px;line-height:1.45}
+h1{color:#1f2a44;border-bottom:3px solid #1f2a44;padding-bottom:6px}
+h2{color:#1f2a44;margin-top:34px;border-bottom:1px solid #ccc;padding-bottom:4px;page-break-after:avoid}
+h3{margin-top:22px;page-break-after:avoid}
+.garde{text-align:center;padding:120px 0 80px;page-break-after:always}
+.garde h1{border:0;font-size:2.4em}
+pre{white-space:pre-wrap;word-break:break-word;font:12px Consolas,monospace;border-radius:4px;padding:10px 12px}
+pre.code{background:#f6f8fa;border:1px solid #e1e4e8}
+pre.console{background:#0c0c0c;color:#e6e6e6}
+.fichier{font:bold 12px Consolas,monospace;color:#555;margin-top:12px}
+figure{margin:16px 0;text-align:center;page-break-inside:avoid}
+figure img{max-width:100%;border:1px solid #ccc}
+figcaption{font-size:.88em;color:#555;margin-top:4px}
+table{border-collapse:collapse;width:100%;font-size:.9em;margin:10px 0}
+th,td{border:1px solid #ccc;padding:5px 8px;text-align:left}
+th{background:#eef0f4}
+.note{background:#fff8e6;border-left:4px solid #c98a2b;padding:8px 12px}
+</style></head><body>
+<div class="garde"><h1>Projet Mercier Data</h1>
+<p style="font-size:1.2em">Notions Python avancées — Master 1 DAT</p>
+<p>Rapport de réalisation : code, routes et captures d'écran</p>
+<p>Année universitaire 2025 / 2026</p></div>
+
+<h2>1. Objectif du projet</h2>
+<p>Atelier Mercier reçoit chaque nuit quatre fichiers (catalogue, ventes d'octobre, configuration
+des boutiques, journal de caisse). Le projet construit une chaîne complète qui répond à la question :
+<i>quel est le chiffre d'affaires par boutique, et quelles boutiques ont atteint leur objectif ?</i></p>
+<p>La chaîne suit les huit étapes du sujet : ingestion, contrôle qualité, entrepôt SQLite en étoile,
+appel du moteur tarifaire Java, restitution web avec FastAPI, administration, sécurité et mise en production.</p>
+
+<h2>2. Environnement virtuel et installation</h2>
+<p>L'environnement virtuel est créé avant toute installation, puis les dépendances sont installées
+depuis <code>requirements.txt</code> (versions figées avec <code>==</code>).</p>
+<div class="fichier">Commandes (Windows)</div><pre class="code">python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip install pytest httpx        # pour les tests</pre>
+<div class="fichier">requirements.txt</div><pre class="code">fastapi==0.165.0
+uvicorn==0.40.0
+jinja2==3.1.6
+python-multipart==0.0.21
+itsdangerous==2.2.0
+JPype1==1.7.1</pre>
+<figure><img src="../captures/01_venv_installation.png"><figcaption>Figure 1 — Environnement virtuel créé et paquets installés</figcaption></figure>
+
+<h2>3. Arborescence du projet</h2>
+<pre class="code">mercier_data/
+├── .venv/                 environnement virtuel
+├── donnees_sources/       fichiers reçus (jamais modifiés)
+├── java/Tarif.java        composant Java (moteur de remises)
+├── mercier/
+│   ├── __init__.py        version du paquet
+│   ├── config.py          configuration (variables d&#x27;environnement)
+│   ├── ingestion.py       étape 1
+│   ├── qualite.py         étape 2
+│   ├── entrepot.py        étape 3
+│   ├── tarif_java.py      étape 4
+│   ├── api.py             étape 5 (+ routes des étapes 6 et 7)
+│   ├── indicateurs.py     requêtes de restitution
+│   ├── administration.py  étape 6
+│   ├── securite.py        étape 7
+│   ├── cli.py             ligne de commande
+│   ├── templates/         base, connexion, tableau, administration
+│   └── static/style.css
+├── tests/                 test_mercier.py (pytest), controle_complet.py
+├── zone_brute/            lots horodatés (créé par l&#x27;ingestion)
+├── entrepot.db            entrepôt SQLite (créé par la chaîne)
+├── captures/              captures d&#x27;écran du rapport
+├── requirements.txt, Dockerfile, .dockerignore, .env.exemple, README.md</pre>
+<div class="fichier">mercier/config.py</div><pre class="code">&quot;&quot;&quot;Configuration de la plateforme, lue dans l&#x27;environnement.&quot;&quot;&quot;
+
+import os
+from pathlib import Path
+
+RACINE = Path(__file__).resolve().parent.parent
+
+SOURCES = Path(os.environ.get(&quot;MERCIER_SOURCES&quot;, RACINE / &quot;donnees_sources&quot;))
+ZONE_BRUTE = Path(os.environ.get(&quot;MERCIER_ZONE_BRUTE&quot;, RACINE / &quot;zone_brute&quot;))
+ENTREPOT = Path(os.environ.get(&quot;MERCIER_ENTREPOT&quot;, RACINE / &quot;entrepot.db&quot;))
+CLASSES_JAVA = Path(os.environ.get(&quot;MERCIER_JAVA&quot;, RACINE / &quot;java&quot;))
+
+CLE_SECRETE = os.environ.get(&quot;MERCIER_CLE_SECRETE&quot;, &quot;cle-de-developpement-a-changer&quot;)
+
+TAUX_TVA = float(os.environ.get(&quot;MERCIER_TVA&quot;, &quot;0.20&quot;))
+
+
+def resume():
+    &quot;&quot;&quot;Renvoie la configuration effective, pour journalisation au démarrage.&quot;&quot;&quot;
+    return {
+        &quot;sources&quot;: str(SOURCES),
+        &quot;entrepot&quot;: str(ENTREPOT),
+        &quot;tva&quot;: TAUX_TVA,
+        &quot;cle_par_defaut&quot;: CLE_SECRETE.startswith(&quot;cle-de-developpement&quot;),
+    }</pre>
+
+<h2>4. Étape 1 : l'ingestion</h2>
+<p>Les fichiers reçus ne sont jamais modifiés : ils sont copiés dans un lot horodaté de la zone brute,
+avec une empreinte SHA-256 et un manifeste.</p>
+<div class="fichier">mercier/ingestion.py</div><pre class="code">def ingerer(sources=None, zone_brute=None, horodatage=None):
+    &quot;&quot;&quot;Copie les fichiers attendus dans un lot horodaté.&quot;&quot;&quot;
+    sources = Path(sources or config.SOURCES)
+    zone_brute = Path(zone_brute or config.ZONE_BRUTE)
+    horodatage = horodatage or datetime.now().strftime(&quot;%Y%m%d_%H%M%S&quot;)
+
+    lot = zone_brute / horodatage
+    lot.mkdir(parents=True, exist_ok=True)
+
+    recus, manquants = [], []
+    for nom in FICHIERS_ATTENDUS:
+        origine = sources / nom
+        if not origine.exists():
+            manquants.append(nom)
+            continue
+        destination = lot / nom
+        shutil.copy2(origine, destination)
+        recus.append({&quot;fichier&quot;: nom,
+                      &quot;octets&quot;: destination.stat().st_size,
+                      &quot;empreinte&quot;: empreinte(destination)[:16]})
+
+    manifeste = {&quot;lot&quot;: horodatage, &quot;source&quot;: str(sources),
+                 &quot;recus&quot;: recus, &quot;manquants&quot;: manquants}
+    (lot / &quot;_manifeste.json&quot;).write_text(
+        json.dumps(manifeste, ensure_ascii=False, indent=2), encoding=&quot;utf-8&quot;)
+    return manifeste</pre>
+<figure><img src="../captures/03_manifeste.png"><figcaption>Figure 2 — Manifeste d&#x27;un lot (empreinte de articles.csv identique à celle du sujet)</figcaption></figure>
+
+<h2>5. Étape 2 : la qualité</h2>
+<p>Six contrôles sont appliqués à chaque vente, du moins coûteux au plus coûteux. Une ligne écartée
+reçoit un seul motif (le premier rencontré) et est tracée dans un objet <code>Rejet</code>.</p>
+<p>Six anomalies (une par contrôle) ont été ajoutées en fin de <code>ventes_octobre.csv</code>
+(lignes 125 à 130), comme dans le sujet ; le doublon de la ligne 89 était déjà présent.</p>
+<div class="fichier">mercier/qualite.py</div><pre class="code">def controler_ventes(lot, catalogue, codes_boutiques):
+    &quot;&quot;&quot;Valide chaque vente du lot. Renvoie (ventes valides, rejets).&quot;&quot;&quot;
+    valides, rejets, vues = [], [], set()
+
+    with open(Path(lot) / &quot;ventes_octobre.csv&quot;, encoding=&quot;utf-8&quot;) as f:
+        for numero, ligne in enumerate(csv.DictReader(f), start=2):
+
+            # 1. champs obligatoires
+            if not all(ligne.get(c) for c in
+                       (&quot;date&quot;, &quot;boutique&quot;, &quot;reference&quot;, &quot;quantite&quot;)):
+                rejets.append(Rejet(numero, &quot;champ obligatoire vide&quot;, ligne))
+                continue
+
+            # 2. date réelle
+            try:
+                jour = date.fromisoformat(ligne[&quot;date&quot;])
+            except ValueError:
+                rejets.append(Rejet(numero, &quot;date invalide&quot;, ligne))
+                continue
+
+            # 3. référence connue du catalogue
+            if ligne[&quot;reference&quot;] not in catalogue:
+                rejets.append(Rejet(numero, &quot;référence inconnue&quot;, ligne))
+                continue
+
+            # 4. boutique connue
+            if ligne[&quot;boutique&quot;] not in codes_boutiques:
+                rejets.append(Rejet(numero, &quot;boutique inconnue&quot;, ligne))
+                continue
+
+            # 5. valeurs numériques dans les bornes
+            try:
+                quantite = int(ligne[&quot;quantite&quot;])
+                remise = int(ligne[&quot;remise_pourcent&quot;] or 0)
+            except ValueError:
+                rejets.append(Rejet(numero, &quot;valeur non numérique&quot;, ligne))
+                continue
+            if quantite &lt; 1:
+                rejets.append(Rejet(numero, &quot;quantité non positive&quot;, ligne))
+                continue
+            if not 0 &lt;= remise &lt;= 100:
+                rejets.append(Rejet(numero, &quot;remise hors bornes&quot;, ligne))
+                continue
+
+            # 6. doublon exact
+            cle = (ligne[&quot;date&quot;], ligne[&quot;boutique&quot;], ligne[&quot;reference&quot;],
+                   quantite, remise)
+            if cle in vues:
+                rejets.append(Rejet(numero, &quot;doublon exact&quot;, ligne))
+                continue
+            vues.add(cle)
+
+            valides.append({&quot;date&quot;: jour.isoformat(),
+                            &quot;boutique&quot;: ligne[&quot;boutique&quot;],
+                            &quot;reference&quot;: ligne[&quot;reference&quot;],
+                            &quot;quantite&quot;: quantite,
+                            &quot;remise_pourcent&quot;: remise})
+
+    return valides, rejets</pre>
+<div class="fichier">mercier/qualite.py</div><pre class="code">class Rejet:
+    &quot;&quot;&quot;Une ligne écartée, avec sa raison.&quot;&quot;&quot;
+
+    def __init__(self, numero, motif, contenu):
+        self.numero = numero
+        self.motif = motif
+        self.contenu = contenu
+
+    def __str__(self):
+        return f&quot;ligne {self.numero:&gt;3} | {self.motif}&quot;
+
+    def en_dictionnaire(self):
+        return {&quot;numero&quot;: self.numero, &quot;motif&quot;: self.motif,
+                &quot;contenu&quot;: json.dumps(self.contenu, ensure_ascii=False)}</pre>
+
+<h2>6. Étape 3 : l'entrepôt</h2>
+<p>Modèle en étoile : la table de faits <code>fait_vente</code> au centre, et les dimensions
+<code>dim_article</code>, <code>dim_boutique</code>, <code>dim_date</code>. S'ajoutent les tables
+<code>rejet</code>, <code>chargement</code> et <code>utilisateur</code>.</p>
+<div class="fichier">mercier/entrepot.py — SCHEMA</div><pre class="code">PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS dim_article (
+    reference  TEXT PRIMARY KEY,
+    nom        TEXT NOT NULL,
+    categorie  TEXT NOT NULL,
+    taille     TEXT NOT NULL,
+    couleur    TEXT NOT NULL,
+    prix_achat REAL NOT NULL,
+    prix_vente REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dim_boutique (
+    code             TEXT PRIMARY KEY,
+    ville            TEXT,
+    surface_m2       INTEGER NOT NULL DEFAULT 0,
+    objectif_mensuel REAL NOT NULL DEFAULT 0,
+    ouverture        TEXT,
+    active           INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS dim_date (
+    jour    TEXT PRIMARY KEY,
+    annee   INTEGER NOT NULL,
+    mois    INTEGER NOT NULL,
+    semaine INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fait_vente (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    jour            TEXT NOT NULL REFERENCES dim_date (jour),
+    boutique        TEXT NOT NULL REFERENCES dim_boutique (code),
+    reference       TEXT NOT NULL REFERENCES dim_article (reference),
+    quantite        INTEGER NOT NULL,
+    remise_pourcent INTEGER NOT NULL,
+    montant_brut    REAL NOT NULL,
+    montant_net     REAL NOT NULL,
+    UNIQUE (jour, boutique, reference, quantite, remise_pourcent)
+);
+
+CREATE TABLE IF NOT EXISTS rejet (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    lot     TEXT NOT NULL,
+    numero  INTEGER NOT NULL,
+    motif   TEXT NOT NULL,
+    contenu TEXT,
+    UNIQUE (lot, numero)
+);
+
+CREATE TABLE IF NOT EXISTS chargement (
+    lot        TEXT PRIMARY KEY,
+    execute_le TEXT NOT NULL,
+    acceptees  INTEGER NOT NULL,
+    rejetees   INTEGER NOT NULL,
+    inserees   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS utilisateur (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    identifiant TEXT NOT NULL UNIQUE,
+    nom         TEXT NOT NULL,
+    sel         TEXT NOT NULL,
+    empreinte   TEXT NOT NULL,
+    role        TEXT NOT NULL CHECK (role IN (&#x27;administrateur&#x27;, &#x27;gerant&#x27;)),
+    boutique    TEXT REFERENCES dim_boutique (code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vente_boutique ON fait_vente (boutique);
+CREATE INDEX IF NOT EXISTS idx_vente_jour ON fait_vente (jour);</pre>
+<p>Les dimensions sont mises à jour par UPSERT (<code>ON CONFLICT … DO UPDATE</code>). La contrainte
+<code>UNIQUE</code> et <code>ON CONFLICT DO NOTHING</code> rendent le chargement idempotent,
+et tout le lot est écrit dans une seule transaction (<code>with con:</code>).</p>
+<div class="fichier">mercier/entrepot.py</div><pre class="code">def charger_ventes(con, ventes, catalogue, calcul_montant):
+    &quot;&quot;&quot;Insère les faits. Renvoie le nombre de lignes réellement ajoutées.&quot;&quot;&quot;
+    avant = con.execute(&quot;SELECT COUNT(*) FROM fait_vente&quot;).fetchone()[0]
+    lignes = []
+    for vente in ventes:
+        prix = catalogue[vente[&quot;reference&quot;]][&quot;prix_vente&quot;]
+        brut = round(prix * vente[&quot;quantite&quot;], 2)
+        net = calcul_montant(prix, vente[&quot;quantite&quot;], vente[&quot;remise_pourcent&quot;])
+        lignes.append((vente[&quot;date&quot;], vente[&quot;boutique&quot;], vente[&quot;reference&quot;],
+                       vente[&quot;quantite&quot;], vente[&quot;remise_pourcent&quot;], brut, net))
+
+    con.executemany(&quot;&quot;&quot;
+        INSERT INTO fait_vente
+            (jour, boutique, reference, quantite, remise_pourcent,
+             montant_brut, montant_net)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+    &quot;&quot;&quot;, lignes)
+    apres = con.execute(&quot;SELECT COUNT(*) FROM fait_vente&quot;).fetchone()[0]
+    return apres - avant</pre>
+<div class="fichier">mercier/entrepot.py</div><pre class="code">def charger(lot, catalogue, configuration, ventes, rejets, calcul_montant,
+            chemin=None):
+    &quot;&quot;&quot;Charge un lot complet dans l&#x27;entrepôt, en une seule transaction.&quot;&quot;&quot;
+    creer_schema(chemin)
+    con = connexion(chemin)
+    try:
+        with con:  # valide à la sortie, annule si erreur
+            charger_articles(con, catalogue)
+            charger_boutiques(con, configuration)
+            charger_dates(con, ventes)
+            inserees = charger_ventes(con, ventes, catalogue, calcul_montant)
+            charger_rejets(con, lot, rejets)
+            con.execute(&quot;&quot;&quot;
+                INSERT INTO chargement (lot, execute_le, acceptees, rejetees, inserees)
+                VALUES (?, datetime(&#x27;now&#x27;), ?, ?, ?)
+                ON CONFLICT (lot) DO UPDATE SET
+                    execute_le = excluded.execute_le,
+                    inserees = excluded.inserees
+            &quot;&quot;&quot;, (lot, len(ventes), len(rejets), inserees))
+        return {&quot;lot&quot;: lot, &quot;acceptees&quot;: len(ventes), &quot;rejetees&quot;: len(rejets),
+                &quot;inserees&quot;: inserees}
+    finally:
+        con.close()</pre>
+<figure><img src="../captures/02_chaine_idempotence.png"><figcaption>Figure 3 — Chaîne lancée deux fois : 122 lignes puis 0 (idempotence vérifiée)</figcaption></figure>
+
+<h2>7. Étape 4 : Python et la JVM</h2>
+<p>Le calcul du montant net est fait par la classe Java <code>Tarif</code>. Le module
+<code>tarif_java.py</code> choisit automatiquement la meilleure voie : JPype, sinon sous-processus
+<code>java</code>, sinon repli en Python (même règle).</p>
+<div class="fichier">java/Tarif.java</div><pre class="code">/**
+ * Moteur de calcul tarifaire d&#x27;Atelier Mercier.
+ * Composant certifié par la comptabilité : ne pas réécrire.
+ */
+public class Tarif {
+
+    public static final double TAUX_TVA = 0.20;
+
+    /** Montant net d&#x27;une ligne de vente, remise déduite, arrondi au centime. */
+    public static double montantLigne(double prix, int quantite, int remisePourcent) {
+        if (prix &lt; 0 || quantite &lt; 1) {
+            throw new IllegalArgumentException(&quot;Prix negatif ou quantite nulle.&quot;);
+        }
+        if (remisePourcent &lt; 0 || remisePourcent &gt; 100) {
+            throw new IllegalArgumentException(&quot;Remise hors bornes.&quot;);
+        }
+        double net = prix * quantite * (1 - remisePourcent / 100.0);
+        return Math.round(net * 100.0) / 100.0;
+    }
+
+    /** Appel en ligne de commande : prix quantite remise. */
+    public static void main(String[] args) {
+        double prix = Double.parseDouble(args[0]);
+        int quantite = Integer.parseInt(args[1]);
+        int remise = Integer.parseInt(args[2]);
+        System.out.println(montantLigne(prix, quantite, remise));
+    }
+}</pre>
+<div class="fichier">mercier/tarif_java.py</div><pre class="code">@lru_cache(maxsize=1)
+def moteur_disponible():
+    &quot;&quot;&quot;Choisit la meilleure voie disponible sur cette machine.&quot;&quot;&quot;
+    try:
+        import jpype  # noqa: F401
+        demarrer_jvm()
+        return &quot;jpype&quot;
+    except Exception:
+        pass
+    try:
+        subprocess.run([&quot;java&quot;, &quot;-version&quot;], capture_output=True, check=True)
+        return &quot;sous-processus&quot;
+    except Exception:
+        return &quot;python&quot;</pre>
+<div class="fichier">mercier/tarif_java.py</div><pre class="code">def montant_ligne(prix, quantite, remise=0):
+    &quot;&quot;&quot;Point d&#x27;entrée unique du reste de la plateforme.&quot;&quot;&quot;
+    voie = moteur_disponible()
+    if voie == &quot;jpype&quot;:
+        return montant_par_jpype(prix, quantite, remise)
+    if voie == &quot;sous-processus&quot;:
+        return montant_par_sous_processus(prix, quantite, remise)
+    return montant_en_python(prix, quantite, remise)</pre>
+<p class="note">Java (JDK) n'est pas installé sur le poste de développement : la détection retient
+donc la voie <b>python</b>, et le résultat est identique (35,82 pour 2 × 19,90 € à 10 %).
+Dans le conteneur Docker (JDK inclus), c'est la voie <b>jpype</b> qui doit être retenue
+(non exécuté ici : Docker Desktop n'était pas démarré).</p>
+<figure><img src="../captures/04_cli_comptes_tarif.png"><figcaption>Figure 4 — Création des comptes de démonstration et comparaison des voies de calcul</figcaption></figure>
+
+<h2>8. Étape 5 : la restitution (FastAPI)</h2>
+<p>Lancement du serveur :</p>
+<pre class="code">uvicorn mercier.api:app --reload</pre>
+<h3>8.1 Tableau des routes</h3>
+<table><tr><th>Méthode</th><th>Route</th><th>Accès</th><th>Rôle</th></tr><tr><td><b>GET</b></td><td><code>/sante</code></td><td>aucune</td><td>Point de santé : état, version, nombre de faits</td></tr><tr><td><b>GET</b></td><td><code>/connexion</code></td><td>aucune</td><td>Formulaire de connexion</td></tr><tr><td><b>POST</b></td><td><code>/connexion</code></td><td>aucune</td><td>Vérifie identifiant / mot de passe, ouvre la session</td></tr><tr><td><b>GET</b></td><td><code>/deconnexion</code></td><td>aucune</td><td>Vide la session</td></tr><tr><td><b>GET</b></td><td><code>/?boutique=…</code></td><td>connecté</td><td>Tableau de bord, filtré par les droits</td></tr><tr><td><b>GET</b></td><td><code>/administration</code></td><td>administrateur</td><td>Page d'administration</td></tr><tr><td><b>POST</b></td><td><code>/administration/boutique</code></td><td>administrateur</td><td>Création d'une boutique</td></tr><tr><td><b>POST</b></td><td><code>/administration/gerant</code></td><td>administrateur</td><td>Nomination d'un gérant</td></tr><tr><td><b>POST</b></td><td><code>/administration/desactiver</code></td><td>administrateur</td><td>Désactivation d'une boutique</td></tr><tr><td><b>GET</b></td><td><code>/api/synthese</code></td><td>connecté</td><td>Ventes, pièces, CA, taux d'objectif (JSON)</td></tr><tr><td><b>GET</b></td><td><code>/api/boutiques</code></td><td>connecté</td><td>CA par boutique comparé à l'objectif (JSON)</td></tr><tr><td><b>GET</b></td><td><code>/api/categories</code></td><td>connecté</td><td>CA par catégorie (JSON)</td></tr><tr><td><b>GET</b></td><td><code>/api/qualite</code></td><td>administrateur</td><td>Dernier lot chargé et ses rejets (JSON)</td></tr><tr><td><b>GET</b></td><td><code>/docs</code></td><td>aucune</td><td>Documentation interactive générée par FastAPI</td></tr></table>
+<h3>8.2 Dépendances</h3>
+<p>La connexion à la base et les droits sont des dépendances FastAPI : la sécurité est dans la
+signature de la route.</p>
+<div class="fichier">mercier/api.py</div><pre class="code">def base():
+    &quot;&quot;&quot;Ouvre une connexion par requête, et la referme à la fin.&quot;&quot;&quot;
+    con = entrepot.connexion()
+    try:
+        yield con
+    finally:
+        con.close()</pre>
+<div class="fichier">mercier/api.py</div><pre class="code">def exige_connexion(requete: Request):
+    &quot;&quot;&quot;Dépendance des routes protégées.&quot;&quot;&quot;
+    compte = requete.session.get(&quot;compte&quot;)
+    if compte is None:
+        raise HTTPException(status_code=401, detail=&quot;Connexion requise&quot;)
+    return compte</pre>
+<div class="fichier">mercier/api.py</div><pre class="code">def exige_administrateur(compte=Depends(exige_connexion)):
+    &quot;&quot;&quot;Dépendance des routes réservées à l&#x27;administrateur.&quot;&quot;&quot;
+    if compte[&quot;role&quot;] != &quot;administrateur&quot;:
+        raise HTTPException(status_code=403, detail=&quot;Réservé à l&#x27;administrateur&quot;)
+    return compte</pre>
+<h3>8.3 Le tableau de bord</h3>
+<div class="fichier">mercier/api.py</div><pre class="code">@app.get(&quot;/&quot;, response_class=HTMLResponse, tags=[&quot;pages&quot;])
+def tableau_de_bord(requete: Request, boutique: str = &quot;&quot;, con=Depends(base)):
+    compte = compte_courant(requete)
+    if compte is None:
+        return RedirectResponse(&quot;/connexion&quot;, status_code=303)
+
+    visibles = securite.boutiques_visibles(con, compte)
+
+    # Le filtre ne peut jamais élargir le périmètre autorisé.
+    perimetre = [boutique] if boutique in visibles else visibles
+    if boutique not in visibles:
+        boutique = &quot;&quot;
+
+    return templates.TemplateResponse(requete, &quot;tableau.html&quot;, {
+        &quot;compte&quot;: compte,
+        &quot;synthese&quot;: indicateurs.synthese(con, perimetre),
+        &quot;boutiques&quot;: indicateurs.par_boutique(con, perimetre),
+        &quot;categories&quot;: indicateurs.par_categorie(con, perimetre),
+        &quot;meilleures&quot;: indicateurs.meilleures_ventes(con, perimetre),
+        &quot;semaines&quot;: indicateurs.evolution(con, perimetre),
+        &quot;visibles&quot;: visibles,
+        &quot;filtre&quot;: boutique,
+        &quot;lot&quot;: indicateurs.qualite_dernier_lot(con),
+    })</pre>
+<div class="fichier">mercier/indicateurs.py</div><pre class="code">def synthese(con, boutiques):
+    if not boutiques:
+        return {&quot;ventes&quot;: 0, &quot;pieces&quot;: 0, &quot;chiffre_affaires&quot;: 0.0,
+                &quot;objectif&quot;: 0.0, &quot;taux_objectif&quot;: 0.0}
+    clause, params = _filtre(boutiques)
+    ligne = dict(con.execute(f&quot;&quot;&quot;
+        SELECT COUNT(*) AS ventes,
+               COALESCE(SUM(v.quantite), 0) AS pieces,
+               COALESCE(ROUND(SUM(v.montant_net), 2), 0) AS chiffre_affaires
+        FROM fait_vente AS v WHERE {clause}
+    &quot;&quot;&quot;, params).fetchone())
+    clause_b, params_b = _filtre(boutiques, &quot;code&quot;)
+    objectif = con.execute(
+        f&quot;SELECT COALESCE(SUM(objectif_mensuel), 0) FROM dim_boutique WHERE {clause_b}&quot;,
+        params_b).fetchone()[0]
+    ligne[&quot;objectif&quot;] = objectif
+    ligne[&quot;taux_objectif&quot;] = round(100 * ligne[&quot;chiffre_affaires&quot;] / objectif, 1) if objectif else 0.0
+    return ligne</pre>
+<figure><img src="../captures/06_connexion.png"><figcaption>Figure 5 — Page de connexion (GET /connexion)</figcaption></figure>
+<figure><img src="../captures/08_tableau_admin.png"><figcaption>Figure 6 — Tableau de bord de l&#x27;administratrice : 122 ventes, 11 728 €, rejets du dernier lot</figcaption></figure>
+<figure><img src="../captures/09_tableau_admin_filtre_paris.png"><figcaption>Figure 7 — Filtre /?boutique=paris-marais pour l&#x27;administratrice</figcaption></figure>
+<h3>8.4 L'API JSON et sa documentation</h3>
+<div class="fichier">mercier/api.py</div><pre class="code">@app.get(&quot;/sante&quot;, tags=[&quot;exploitation&quot;])
+def sante(con=Depends(base)):
+    &quot;&quot;&quot;Point de contrôle, appelé par la supervision. Sans authentification.&quot;&quot;&quot;
+    ventes = con.execute(&quot;SELECT COUNT(*) FROM fait_vente&quot;).fetchone()[0]
+    return {&quot;etat&quot;: &quot;ok&quot;, &quot;version&quot;: __version__, &quot;faits&quot;: ventes}</pre>
+<div class="fichier">mercier/api.py</div><pre class="code">@app.get(&quot;/api/boutiques&quot;, tags=[&quot;api&quot;])
+def api_boutiques(compte=Depends(exige_connexion), con=Depends(base)):
+    &quot;&quot;&quot;Chiffre d&#x27;affaires par boutique, confronté à l&#x27;objectif.&quot;&quot;&quot;
+    return indicateurs.par_boutique(con, securite.boutiques_visibles(con, compte))</pre>
+<figure><img src="../captures/17_sante.png"><figcaption>Figure 8 — GET /sante sans authentification</figcaption></figure>
+<figure><img src="../captures/18_api_boutiques_json.png"><figcaption>Figure 9 — GET /api/boutiques (administratrice)</figcaption></figure>
+<figure><img src="../captures/19_api_qualite_json.png"><figcaption>Figure 10 — GET /api/qualite : dernier lot et ses 7 rejets</figcaption></figure>
+<figure><img src="../captures/16_documentation_docs.png"><figcaption>Figure 11 — Documentation interactive générée sur /docs</figcaption></figure>
+<figure><img src="../captures/16b_docs_route_boutiques.png"><figcaption>Figure 12 — Détail d&#x27;une route dans /docs</figcaption></figure>
+
+<h2>9. Étape 6 : l'administration</h2>
+<p>La validation se fait dans le module métier (et non dans le formulaire) : elle vaut donc aussi
+pour l'API. Le code d'une boutique est contrôlé par une expression régulière.</p>
+<div class="fichier">mercier/administration.py</div><pre class="code">def valider_code(code):
+    &quot;&quot;&quot;Un code de boutique : minuscules, chiffres et traits d&#x27;union.&quot;&quot;&quot;
+    if not MOTIF_CODE.match(code):
+        raise ValueError(
+            &quot;Code invalide : minuscules, chiffres et traits d&#x27;union, &quot;
+            &quot;de 3 à 30 caractères, commençant par une lettre.&quot;)
+    return code</pre>
+<div class="fichier">mercier/administration.py</div><pre class="code">def creer_boutique(con, code, ville, surface_m2, objectif_mensuel,
+                   ouverture=None):
+    &quot;&quot;&quot;Crée une boutique dans la dimension. Renvoie son code.&quot;&quot;&quot;
+    valider_code(code)
+    if objectif_mensuel &lt; 0:
+        raise ValueError(&quot;L&#x27;objectif ne peut pas être négatif.&quot;)
+    if con.execute(&quot;SELECT 1 FROM dim_boutique WHERE code = ?&quot;,
+                   (code,)).fetchone():
+        raise ValueError(f&quot;La boutique {code} existe déjà.&quot;)
+
+    con.execute(&quot;&quot;&quot;
+        INSERT INTO dim_boutique
+            (code, ville, surface_m2, objectif_mensuel, ouverture, active)
+        VALUES (?, ?, ?, ?, ?, 1)
+    &quot;&quot;&quot;, (code, ville or None, int(surface_m2), float(objectif_mensuel),
+          ouverture or date.today().isoformat()))
+    return code</pre>
+<div class="fichier">mercier/administration.py</div><pre class="code">def nommer_gerant(con, boutique, identifiant, nom, motdepasse):
+    &quot;&quot;&quot;Crée un compte gérant rattaché à une boutique existante.&quot;&quot;&quot;
+    if not con.execute(&quot;SELECT 1 FROM dim_boutique WHERE code = ?&quot;,
+                       (boutique,)).fetchone():
+        raise ValueError(f&quot;Boutique inconnue : {boutique}&quot;)
+    if con.execute(&quot;SELECT 1 FROM utilisateur WHERE identifiant = ?&quot;,
+                   (identifiant,)).fetchone():
+        raise ValueError(f&quot;L&#x27;identifiant {identifiant} est déjà pris.&quot;)
+    return securite.creer_utilisateur(con, identifiant, nom, motdepasse,
+                                      &quot;gerant&quot;, boutique)</pre>
+<div class="fichier">mercier/api.py</div><pre class="code">@app.post(&quot;/administration/boutique&quot;, tags=[&quot;administration&quot;])
+def creation_boutique(code: str = Form(...), ville: str = Form(&quot;&quot;),
+                      surface_m2: int = Form(0),
+                      objectif_mensuel: float = Form(0),
+                      con=Depends(base),
+                      compte=Depends(exige_administrateur)):
+    try:
+        with con:
+            administration.creer_boutique(con, code.strip().lower(),
+                                          ville.strip(), surface_m2,
+                                          objectif_mensuel)
+    except ValueError as erreur:
+        return RedirectResponse(f&quot;/administration?erreur={quote(str(erreur))}&quot;,
+                                status_code=303)
+    return RedirectResponse(f&quot;/administration?message={quote(f&#x27;Boutique {code} créée&#x27;)}&quot;,
+                            status_code=303)</pre>
+<p>Après un envoi, la route redirige (code 303) : actualiser la page ne recrée pas la boutique.</p>
+<figure><img src="../captures/13_administration.png"><figcaption>Figure 13 — Page d&#x27;administration</figcaption></figure>
+<figure><img src="../captures/14a_formulaire_boutique.png"><figcaption>Figure 14 — Saisie d&#x27;une nouvelle boutique (bordeaux-centre)</figcaption></figure>
+<figure><img src="../captures/14b_boutique_creee.png"><figcaption>Figure 15 — Boutique créée, message de confirmation</figcaption></figure>
+<figure><img src="../captures/15_code_invalide.png"><figcaption>Figure 16 — Code « Bordeaux Lac » refusé par la validation</figcaption></figure>
+<figure><img src="../captures/15b_gerant_nomme.png"><figcaption>Figure 17 — Gérant nommé pour bordeaux-centre</figcaption></figure>
+
+<h2>10. Étape 7 : la sécurité</h2>
+<h3>10.1 Mots de passe</h3>
+<p>Aucun mot de passe n'est stocké : on stocke un sel aléatoire et une empreinte PBKDF2-SHA256
+(200 000 itérations). La comparaison est faite en temps constant.</p>
+<div class="fichier">mercier/securite.py</div><pre class="code">def hacher(motdepasse, sel=None):
+    &quot;&quot;&quot;Renvoie le couple (sel, empreinte) d&#x27;un mot de passe.&quot;&quot;&quot;
+    sel = sel or secrets.token_hex(16)
+    empreinte = hashlib.pbkdf2_hmac(&quot;sha256&quot;, motdepasse.encode(&quot;utf-8&quot;),
+                                    bytes.fromhex(sel), ITERATIONS)
+    return sel, empreinte.hex()</pre>
+<div class="fichier">mercier/securite.py</div><pre class="code">def verifier(motdepasse, sel, empreinte_attendue):
+    &quot;&quot;&quot;Vérifie un mot de passe en temps constant.&quot;&quot;&quot;
+    _, empreinte = hacher(motdepasse, sel)
+    return hmac.compare_digest(empreinte, empreinte_attendue)</pre>
+<div class="fichier">mercier/securite.py</div><pre class="code">def authentifier(con, identifiant, motdepasse):
+    &quot;&quot;&quot;Renvoie le compte si les identifiants sont bons, sinon None.&quot;&quot;&quot;
+    ligne = con.execute(
+        &quot;SELECT * FROM utilisateur WHERE identifiant = ?&quot;,
+        (identifiant,)).fetchone()
+
+    if ligne is None:
+        # On hache quand même, pour que la durée de réponse ne révèle pas
+        # si l&#x27;identifiant existe.
+        hacher(motdepasse, secrets.token_hex(16))
+        return None
+
+    if not verifier(motdepasse, ligne[&quot;sel&quot;], ligne[&quot;empreinte&quot;]):
+        return None
+
+    return {&quot;id&quot;: ligne[&quot;id&quot;], &quot;identifiant&quot;: ligne[&quot;identifiant&quot;],
+            &quot;nom&quot;: ligne[&quot;nom&quot;], &quot;role&quot;: ligne[&quot;role&quot;],
+            &quot;boutique&quot;: ligne[&quot;boutique&quot;]}</pre>
+<figure><img src="../captures/07_connexion_erreur.png"><figcaption>Figure 18 — Mauvais mot de passe : message volontairement neutre</figcaption></figure>
+<h3>10.2 Session, rôles et cloisonnement</h3>
+<p>La session est un cookie signé avec la clé secrète (<code>SessionMiddleware</code>). Le
+cloisonnement est appliqué dans la requête SQL : un gérant ne voit que sa boutique.</p>
+<div class="fichier">mercier/securite.py</div><pre class="code">def boutiques_visibles(con, compte):
+    &quot;&quot;&quot;Les boutiques que ce compte a le droit de consulter.
+
+    C&#x27;est ici que se joue le cloisonnement : un gérant ne voit que la sienne.
+    &quot;&quot;&quot;
+    if compte[&quot;role&quot;] == &quot;administrateur&quot;:
+        return [l[&quot;code&quot;] for l in con.execute(
+            &quot;SELECT code FROM dim_boutique WHERE active = 1 ORDER BY code&quot;)]
+    return [compte[&quot;boutique&quot;]] if compte[&quot;boutique&quot;] else []</pre>
+<figure><img src="../captures/10_tableau_gerante_lyon.png"><figcaption>Figure 19 — Julie, gérante de Lyon : 31 ventes, 3 592 €, une seule boutique</figcaption></figure>
+<figure><img src="../captures/11_gerante_triche_paris.png"><figcaption>Figure 20 — Julie saisit /?boutique=paris-marais : le filtre est ignoré, elle voit Lyon</figcaption></figure>
+<figure><img src="../captures/12_gerante_admin_403.png"><figcaption>Figure 21 — /administration interdit à la gérante (403)</figcaption></figure>
+<figure><img src="../captures/12b_gerante_api_qualite_403.png"><figcaption>Figure 22 — /api/qualite interdite à la gérante (403)</figcaption></figure>
+<h3>10.3 Contrôle complet (16 vérifications)</h3>
+<p>Script <code>tests/controle_complet.py</code>, exécuté sur le serveur lancé :</p>
+<pre class="console">1. santé sans compte     : 200 {&#x27;etat&#x27;: &#x27;ok&#x27;, &#x27;version&#x27;: &#x27;1.0.0&#x27;, &#x27;faits&#x27;: 122}
+2. accueil sans compte   : 303 /connexion
+3. api sans compte       : 401
+4. mauvais mot de passe  : /connexion?erreur=1
+5. connexion gérante     : 303 /
+6. tableau de bord       : 200
+7. synthèse gérante      : {&#x27;ventes&#x27;: 31, &#x27;pieces&#x27;: 51, &#x27;chiffre_affaires&#x27;: 3592.01, &#x27;objectif&#x27;: 3200.0, &#x27;taux_objectif&#x27;: 112.3}
+8. boutiques visibles    : [&#x27;lyon-presquile&#x27;]
+9. admin interdit à julie: 403
+10. api qualité interdite: 403
+    filtre interdit (julie demande paris) : False
+11. synthèse admin       : {&#x27;ventes&#x27;: 122, &#x27;pieces&#x27;: 181, &#x27;chiffre_affaires&#x27;: 11727.69, &#x27;objectif&#x27;: 13600.0, &#x27;taux_objectif&#x27;: 86.2}
+12. boutiques admin      : [&#x27;lyon-presquile&#x27;, &#x27;paris-marais&#x27;, &#x27;en-ligne&#x27;, &#x27;lille-centre&#x27;]
+13. page admin           : 200
+14. création boutique    : {&#x27;message&#x27;: &#x27;Boutique nantes-graslin créée&#x27;}
+15. code invalide refusé : {&#x27;erreur&#x27;: &quot;Code invalide : minuscules, chiffres et traits d&#x27;union, de 3 à 30 caractères, commençant par une lettre.&quot;}
+16. documentation        : 200</pre>
+<table><tr><th></th><th>Claire, administratrice</th><th>Julie, gérante de Lyon</th></tr>
+<tr><td>Chiffre d'affaires</td><td>11 728 €</td><td>3 592 €</td></tr>
+<tr><td>Ventes</td><td>122</td><td>31</td></tr>
+<tr><td>Page d'administration</td><td>accessible</td><td>code 403</td></tr>
+<tr><td>API qualité</td><td>accessible</td><td>code 403</td></tr></table>
+
+<h2>11. Étape 8 : la mise en production</h2>
+<p>Les secrets viennent de l'environnement. <code>.env.exemple</code> est livré, <code>.env</code>
+est exclu du dépôt. L'application refuse de démarrer en production avec la clé de développement.</p>
+<div class="fichier">.env.exemple</div><pre class="code">MERCIER_SOURCES=./donnees_sources
+MERCIER_ENTREPOT=./entrepot.db
+MERCIER_JAVA=./java
+# À remplacer impérativement en production :
+MERCIER_CLE_SECRETE=changez-moi-par-une-valeur-aleatoire-longue</pre>
+<div class="fichier">Dockerfile</div><pre class="code"># Image de base contenant Python et un JRE, puisque le moteur
+# tarifaire est en Java.
+FROM eclipse-temurin:21-jdk-jammy
+
+RUN apt-get update \
+    &amp;&amp; apt-get install -y --no-install-recommends python3 python3-pip \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Les dépendances d&#x27;abord : cette couche reste en cache tant que
+# requirements.txt ne change pas.
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+COPY . .
+RUN javac java/Tarif.java
+
+ENV MERCIER_ENTREPOT=/donnees/entrepot.db \
+    MERCIER_ZONE_BRUTE=/donnees/zone_brute
+VOLUME [&quot;/donnees&quot;]
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD python3 -c &quot;import urllib.request; urllib.request.urlopen(&#x27;http://localhost:8000/sante&#x27;)&quot;
+
+CMD [&quot;uvicorn&quot;, &quot;mercier.api:app&quot;, &quot;--host&quot;, &quot;0.0.0.0&quot;, &quot;--port&quot;, &quot;8000&quot;]</pre>
+<div class="fichier">.dockerignore</div><pre class="code">.venv
+__pycache__
+*.pyc
+.pytest_cache
+entrepot.db
+zone_brute
+.env
+captures
+rapport</pre>
+<p class="note">Seule différence avec le sujet : l'image de base est <code>eclipse-temurin:21-jdk-jammy</code>
+au lieu de <code>-jre</code>, car la commande <code>RUN javac java/Tarif.java</code> nécessite le
+compilateur, absent d'un JRE.</p>
+<div class="fichier">Construction et lancement du conteneur</div><pre class="code">docker build -t mercier-data .
+docker run -p 8000:8000 -v mercier_donnees:/donnees -e MERCIER_CLE_SECRETE=&lt;clé aléatoire&gt; mercier-data</pre>
+<div class="fichier">Serveur de production (sans --reload)</div><pre class="code">uvicorn mercier.api:app --host 0.0.0.0 --port 8000 --workers 4</pre>
+
+<h2>12. Tests</h2>
+<p>Sept tests pytest, chacun sur un entrepôt temporaire (<code>tmp_path</code>) : ingestion,
+contrôle qualité, idempotence, moteur tarifaire, empreintes différentes pour un même mot de passe,
+code de boutique invalide, cloisonnement.</p>
+<figure><img src="../captures/05_tests_pytest.png"><figcaption>Figure 23 — python -m pytest tests/ -v : 7 tests réussis</figcaption></figure>
+<figure><img src="../captures/20_controle_complet.png"><figcaption>Figure 24 — Contrôle complet de l&#x27;application</figcaption></figure>
+
+<h2>13. Lancer le projet</h2>
+<pre class="code">.venv\Scripts\activate
+python -m mercier.cli chaine      # ingestion + qualité + chargement
+python -m mercier.cli comptes     # comptes de démonstration
+uvicorn mercier.api:app --reload  # puis ouvrir http://127.0.0.1:8000
+python -m pytest tests/ -q</pre>
+<p>Comptes de démonstration (développement uniquement) : <code>claire</code> (administratrice) et
+<code>julie</code> (gérante de lyon-presquile), mot de passe <code>mercier2026</code>.</p>
+
+<h2>14. Conclusion</h2>
+<p>La plateforme répond à la question de départ en une seconde : le chiffre d'affaires d'octobre est de
+11 728 € pour un objectif de 13 600 € (86 %). Seule la boutique de Lyon dépasse son objectif (112 %).
+Les chiffres obtenus sont identiques à ceux du sujet (122 ventes acceptées, 7 rejetées, 94,57 %).</p>
+</body></html>

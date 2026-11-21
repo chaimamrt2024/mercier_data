@@ -1,0 +1,33 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f4f2ee; color: #222; }
+header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+         padding: 12px 24px; background: #1f2a44; color: #fff; }
+header a { color: #fff; text-decoration: none; margin-right: 16px; }
+.marque { font-weight: 700; font-size: 1.2em; }
+.qui { opacity: .75; margin-right: 16px; }
+main { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+h1 { font-size: 1.5em; } h2 { font-size: 1.1em; margin-top: 0; }
+.entete { display: flex; justify-content: space-between; align-items: center; }
+.carte { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;
+         box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.tuile { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.libelle { color: #666; font-size: .85em; }
+.valeur { font-size: 1.7em; font-weight: 700; margin: 4px 0; }
+.detail { color: #666; font-size: .85em; }
+.deux { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.jauge { margin: 10px 0; }
+.jauge span { float: right; color: #555; font-size: .9em; }
+.piste { height: 10px; background: #e5e1d8; border-radius: 5px; margin-top: 4px; overflow: hidden; }
+.piste i { display: block; height: 100%; background: #c98a2b; }
+.piste.atteint i { background: #2f8f4e; }
+table { width: 100%; border-collapse: collapse; font-size: .92em; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+label { display: block; margin: 8px 0; }
+input, select { width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px; }
+button { background: #1f2a44; color: #fff; border: 0; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+button.petit { padding: 4px 10px; margin: 0; font-size: .85em; background: #8a3b3b; }
+.connexion { max-width: 360px; margin: 60px auto; }
+.erreur { background: #fbe4e4; color: #8a1f1f; padding: 8px 12px; border-radius: 4px; }
+.message { background: #e2f3e7; color: #1f6a35; padding: 8px 12px; border-radius: 4px; }
+code { font-size: .85em; }

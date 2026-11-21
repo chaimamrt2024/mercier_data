@@ -1,0 +1,2 @@
+# Les fichiers reçus ne doivent jamais être modifiés (empreintes SHA-256)
+donnees_sources/** -text

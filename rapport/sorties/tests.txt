@@ -1,0 +1,16 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\chaim\OneDrive\Attachments\Desktop\mercier_data\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\chaim\OneDrive\Attachments\Desktop\mercier_data
+plugins: anyio-4.16.0
+collecting ... collected 7 items
+
+tests/test_mercier.py::test_ingestion_cree_un_manifeste PASSED           [ 14%]
+tests/test_mercier.py::test_controle_qualite_sept_rejets PASSED          [ 28%]
+tests/test_mercier.py::test_chargement_idempotent PASSED                 [ 42%]
+tests/test_mercier.py::test_trois_voies_meme_resultat PASSED             [ 57%]
+tests/test_mercier.py::test_deux_comptes_meme_mot_de_passe_ont_des_empreintes_differentes PASSED [ 71%]
+tests/test_mercier.py::test_code_boutique_invalide_refuse PASSED         [ 85%]
+tests/test_mercier.py::test_cloisonnement PASSED                         [100%]
+
+============================== 7 passed in 1.38s ==============================

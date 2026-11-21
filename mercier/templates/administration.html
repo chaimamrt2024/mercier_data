@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titre %}Administration · Mercier Data{% endblock %}
+{% block contenu %}
+<h1>Administration</h1>
+{% if message %}<p class="message">{{ message }}</p>{% endif %}
+{% if erreur %}<p class="erreur">{{ erreur }}</p>{% endif %}
+
+<div class="deux">
+  <form class="carte" method="post" action="/administration/boutique">
+    <h2>Créer une boutique</h2>
+    <label>Code <input name="code" placeholder="bordeaux-centre" required></label>
+    <label>Ville <input name="ville" placeholder="Bordeaux"></label>
+    <label>Surface (m²) <input name="surface_m2" type="number" value="0" min="0"></label>
+    <label>Objectif mensuel (€) <input name="objectif_mensuel" type="number" value="0" step="0.01"></label>
+    <button type="submit">Créer</button>
+  </form>
+
+  <form class="carte" method="post" action="/administration/gerant">
+    <h2>Nommer un gérant</h2>
+    <label>Boutique
+      <select name="boutique">
+        {% for b in boutiques if b.active %}<option>{{ b.code }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Identifiant <input name="identifiant" required></label>
+    <label>Nom <input name="nom" required></label>
+    <label>Mot de passe <input name="motdepasse" type="password" minlength="8" required></label>
+    <button type="submit">Nommer</button>
+  </form>
+</div>
+
+<section class="carte">
+  <h2>Boutiques</h2>
+  <table>
+    <tr><th>Code</th><th>Ville</th><th>Surface</th><th>Objectif</th><th>Ouverture</th><th>État</th><th></th></tr>
+    {% for b in boutiques %}
+    <tr>
+      <td>{{ b.code }}</td><td>{{ b.ville or '—' }}</td><td>{{ b.surface_m2 }} m²</td>
+      <td>{{ b.objectif_mensuel|euros }} €</td><td>{{ b.ouverture }}</td>
+      <td>{{ 'active' if b.active else 'inactive' }}</td>
+      <td>{% if b.active %}
+        <form method="post" action="/administration/desactiver">
+          <input type="hidden" name="code" value="{{ b.code }}">
+          <button class="petit">Désactiver</button>
+        </form>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section class="carte">
+  <h2>Comptes</h2>
+  <table>
+    <tr><th>Identifiant</th><th>Nom</th><th>Rôle</th><th>Boutique</th></tr>
+    {% for u in utilisateurs %}
+    <tr><td>{{ u.identifiant }}</td><td>{{ u.nom }}</td><td>{{ u.role }}</td><td>{{ u.boutique or '—' }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

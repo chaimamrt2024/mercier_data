@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+entrepot.db
+zone_brute
+.env
+captures
+rapport

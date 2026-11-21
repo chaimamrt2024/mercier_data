@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block contenu %}
+<div class="entete">
+  <h1>Tableau de bord · octobre 2026</h1>
+  {% if visibles|length > 1 %}
+  <form method="get" action="/">
+    <select name="boutique" onchange="this.form.submit()">
+      <option value="">Tout le réseau</option>
+      {% for code in visibles %}
+      <option value="{{ code }}" {{ 'selected' if code == filtre }}>{{ code }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+<section class="tuiles">
+  <div class="tuile">
+    <div class="libelle">Chiffre d'affaires</div>
+    <div class="valeur">{{ synthese.chiffre_affaires|euros }} €</div>
+    <div class="detail">{{ synthese.taux_objectif }} % de l'objectif</div>
+  </div>
+  <div class="tuile">
+    <div class="libelle">Ventes</div>
+    <div class="valeur">{{ synthese.ventes }}</div>
+    <div class="detail">{{ synthese.pieces }} pièces</div>
+  </div>
+  <div class="tuile">
+    <div class="libelle">Objectif mensuel</div>
+    <div class="valeur">{{ synthese.objectif|euros }} €</div>
+    <div class="detail">{{ boutiques|length }} boutique(s)</div>
+  </div>
+  {% if lot and compte.role == 'administrateur' %}
+  <div class="tuile">
+    <div class="libelle">Qualité du dernier lot</div>
+    <div class="valeur">{{ lot.taux_acceptation }} %</div>
+    <div class="detail">{{ lot.acceptees }} acceptées, {{ lot.rejetees }} rejetées</div>
+  </div>
+  {% endif %}
+</section>
+
+<section class="carte">
+  <h2>Objectifs par boutique</h2>
+  {% for b in boutiques %}
+  <div class="jauge">
+    <b>{{ b.libelle }}</b>
+    <span>{{ b.chiffre_affaires|euros }} € / {{ b.objectif|euros }} € ({{ b.taux or 0 }} %)</span>
+    <div class="piste {{ 'atteint' if (b.taux or 0) >= 100 }}">
+      <i style="width: {{ [b.taux or 0, 100]|min|round|int }}%"></i>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<div class="deux">
+  <section class="carte">
+    <h2>Par catégorie</h2>
+    <table>
+      <tr><th>Catégorie</th><th>Pièces</th><th>CA</th></tr>
+      {% for c in categories %}
+      <tr><td>{{ c.categorie }}</td><td>{{ c.pieces }}</td><td>{{ c.chiffre_affaires|euros(2) }} €</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  <section class="carte">
+    <h2>Meilleures ventes</h2>
+    <table>
+      <tr><th>Référence</th><th>Article</th><th>Pièces</th><th>CA</th></tr>
+      {% for m in meilleures %}
+      <tr><td>{{ m.reference }}</td><td>{{ m.nom }}</td><td>{{ m.pieces }}</td><td>{{ m.chiffre_affaires|euros(2) }} €</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+</div>
+
+<section class="carte">
+  <h2>Évolution par semaine</h2>
+  <table>
+    <tr><th>Semaine</th><th>Ventes</th><th>CA</th></tr>
+    {% for s in semaines %}
+    <tr><td>S{{ s.semaine }}</td><td>{{ s.ventes }}</td><td>{{ s.chiffre_affaires|euros(2) }} €</td></tr>
+    {% endfor %}
+  </table>
+</section>
+
+{% if lot and compte.role == 'administrateur' %}
+<section class="carte">
+  <h2>Rejets du lot {{ lot.lot }}</h2>
+  <table>
+    <tr><th>Ligne</th><th>Motif</th><th>Contenu</th></tr>
+    {% for r in lot.rejets %}
+    <tr><td>{{ r.numero }}</td><td>{{ r.motif }}</td><td><code>{{ r.contenu.values()|join(', ') }}</code></td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endblock %}

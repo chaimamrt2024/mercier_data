@@ -1,0 +1,17 @@
+1. santé sans compte     : 200 {'etat': 'ok', 'version': '1.0.0', 'faits': 122}
+2. accueil sans compte   : 303 /connexion
+3. api sans compte       : 401
+4. mauvais mot de passe  : /connexion?erreur=1
+5. connexion gérante     : 303 /
+6. tableau de bord       : 200
+7. synthèse gérante      : {'ventes': 31, 'pieces': 51, 'chiffre_affaires': 3592.01, 'objectif': 3200.0, 'taux_objectif': 112.3}
+8. boutiques visibles    : ['lyon-presquile']
+9. admin interdit à julie: 403
+10. api qualité interdite: 403
+    filtre interdit (julie demande paris) : False
+11. synthèse admin       : {'ventes': 122, 'pieces': 181, 'chiffre_affaires': 11727.69, 'objectif': 13600.0, 'taux_objectif': 86.2}
+12. boutiques admin      : ['lyon-presquile', 'paris-marais', 'en-ligne', 'lille-centre']
+13. page admin           : 200
+14. création boutique    : {'message': 'Boutique nantes-graslin créée'}
+15. code invalide refusé : {'erreur': "Code invalide : minuscules, chiffres et traits d'union, de 3 à 30 caractères, commençant par une lettre."}
+16. documentation        : 200

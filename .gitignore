@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+entrepot.db
+zone_brute/
+.env

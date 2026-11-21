@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titre %}Connexion · Mercier Data{% endblock %}
+{% block contenu %}
+<form class="carte connexion" method="post" action="/connexion">
+  <h1>Connexion</h1>
+  {% if erreur %}<p class="erreur">Identifiant ou mot de passe incorrect.</p>{% endif %}
+  <label>Identifiant <input name="identifiant" required autofocus></label>
+  <label>Mot de passe <input name="motdepasse" type="password" required></label>
+  <button type="submit">Se connecter</button>
+</form>
+{% endblock %}

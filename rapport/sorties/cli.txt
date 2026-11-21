@@ -1,0 +1,18 @@
+$ python -m mercier.cli comptes
+compte créé : claire (administrateur)
+compte créé : julie (gerant)
+
+$ python -m mercier.cli tarif
+voie retenue : python
+sous-processus : indisponible (FileNotFoundError)
+jpype          : indisponible (JVMNotFoundException)
+python         : 35.82
+point d'entrée : 143.65
+
+$ python -m mercier.cli config
+{
+  "sources": "C:\\Users\\chaim\\OneDrive\\Attachments\\Desktop\\mercier_data\\donnees_sources",
+  "entrepot": "C:\\Users\\chaim\\OneDrive\\Attachments\\Desktop\\mercier_data\\entrepot.db",
+  "tva": 0.2,
+  "cle_par_defaut": true
+}

@@ -1,0 +1,19 @@
+> python -m venv .venv
+> .venv\Scripts\activate
+(.venv) > pip install -r requirements.txt
+(.venv) > pip list
+Package           Version
+----------------- ----------
+fastapi           0.165.0
+httpx             0.28.1
+itsdangerous      2.2.0
+Jinja2            3.1.6
+jpype1            1.7.1
+pydantic          2.14.4
+pytest            9.2.0
+python-multipart  0.0.21
+starlette         1.10.0
+uvicorn           0.40.0
+
+(.venv) > python --version
+Python 3.11.9

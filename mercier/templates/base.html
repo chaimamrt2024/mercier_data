@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titre %}Mercier Data{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <a class="marque" href="/">Mercier Data</a>
+    {% if compte %}
+    <nav>
+      <a href="/">Tableau de bord</a>
+      {% if compte.role == 'administrateur' %}<a href="/administration">Administration</a>{% endif %}
+      <a href="/docs">API</a>
+      <span class="qui">{{ compte.nom }} · {{ compte.role }}{% if compte.boutique %} ({{ compte.boutique }}){% endif %}</span>
+      <a href="/deconnexion">Déconnexion</a>
+    </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% block contenu %}{% endblock %}
+  </main>
+</body>
+</html>

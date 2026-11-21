@@ -1,0 +1,27 @@
+{
+  "lot": "20261121_115617",
+  "source": "C:\\Users\\chaim\\OneDrive\\Attachments\\Desktop\\mercier_data\\donnees_sources",
+  "recus": [
+    {
+      "fichier": "articles.csv",
+      "octets": 1118,
+      "empreinte": "27b0e01af507cc37"
+    },
+    {
+      "fichier": "ventes_octobre.csv",
+      "octets": 5064,
+      "empreinte": "1adc3ea3d20bdb44"
+    },
+    {
+      "fichier": "boutiques.json",
+      "octets": 921,
+      "empreinte": "0bfb8fd11979ecf7"
+    },
+    {
+      "fichier": "journal_boutique.log",
+      "octets": 2710,
+      "empreinte": "e1827b6d57483753"
+    }
+  ],
+  "manquants": []
+}

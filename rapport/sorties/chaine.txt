@@ -1,0 +1,25 @@
+$ python -m mercier.cli chaine
+Lot 20261121_115617 : 4 fichiers reçus
+Contrôle : 122 acceptées, 7 rejetées (94.57 pour cent)
+    ligne  89 | doublon exact
+    ligne 125 | référence inconnue
+    ligne 126 | quantité non positive
+    ligne 127 | date invalide
+    ligne 128 | remise hors bornes
+    ligne 129 | boutique inconnue
+    ligne 130 | champ obligatoire vide
+Moteur tarifaire : python
+Chargement : 122 nouvelles lignes de faits
+
+$ python -m mercier.cli chaine
+Lot 20261121_115618 : 4 fichiers reçus
+Contrôle : 122 acceptées, 7 rejetées (94.57 pour cent)
+    ligne  89 | doublon exact
+    ligne 125 | référence inconnue
+    ligne 126 | quantité non positive
+    ligne 127 | date invalide
+    ligne 128 | remise hors bornes
+    ligne 129 | boutique inconnue
+    ligne 130 | champ obligatoire vide
+Moteur tarifaire : python
+Chargement : 0 nouvelles lignes de faits
